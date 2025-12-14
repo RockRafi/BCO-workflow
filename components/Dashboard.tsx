@@ -4,7 +4,7 @@ import { db } from '../services/mockDb';
 import { 
   Clock, CheckCircle2, AlertCircle, FileText, ChevronRight, MoreHorizontal, Send, 
   ExternalLink, Calendar, Eye, UserPlus, X, UploadCloud, Link as LinkIcon, 
-  Filter, Search, History, Bell, Edit2, Trash2, FolderOpen, Activity, PlayCircle
+  Filter, Search, History, Bell, Edit2, Trash2, FolderOpen, Activity, PlayCircle, ThumbsUp, ThumbsDown
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -21,9 +21,6 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
   const [filteredRequests, setFilteredRequests] = useState<Request[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   
-  // Settings Data
-  const settings = db.getSettings();
-
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,6 +30,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
   // Form State
   const [assignNotes, setAssignNotes] = useState('');
@@ -42,9 +40,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
   const [submissionLink, setSubmissionLink] = useState('');
   const [submissionNotes, setSubmissionNotes] = useState('');
 
+  // Review State (Master)
+  const [reviewFeedback, setReviewFeedback] = useState('');
+
   useEffect(() => {
     refreshData();
-  }, [currentUser, isAssignModalOpen, isSubmitModalOpen]); 
+  }, [currentUser, isAssignModalOpen, isSubmitModalOpen, isReviewModalOpen]); 
 
   // --- DATA REFRESH ---
   const refreshData = () => {
@@ -116,6 +117,24 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
     }
   };
 
+  const handleMasterReview = (action: 'APPROVE' | 'REJECT') => {
+     if(action === 'REJECT' && !reviewFeedback) {
+        alert("Please provide feedback for rework.");
+        return;
+     }
+
+     // Find the relevant task to review (assuming review of the first submitted task found for now)
+     // In real app, Master might select which task to review if multiple
+     const task = selectedRequest?.tasks?.find(t => t.driveFolderLink);
+     
+     if (task) {
+        db.reviewTask(task.id, action, reviewFeedback);
+        setIsReviewModalOpen(false);
+        setReviewFeedback('');
+        refreshData();
+     }
+  };
+
   const handleEditSubmission = (req: Request) => {
     const task = req.tasks?.find(t => t.assignedToRoleId === currentUser.role);
     if (task) {
@@ -148,6 +167,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
       case Status.PENDING: return 'bg-amber-100 text-amber-700 border-amber-200';
       case Status.ASSIGNED: return 'bg-blue-100 text-blue-700 border-blue-200';
       case Status.SUBMITTED: return 'bg-purple-100 text-purple-700 border-purple-200';
+      case Status.CHANGES_REQUESTED: return 'bg-orange-100 text-orange-700 border-orange-200';
       case Status.FINALIZED: return 'bg-green-100 text-green-700 border-green-200';
       case Status.REJECTED: return 'bg-red-100 text-red-700 border-red-200';
       default: return 'bg-slate-100 text-slate-700';
@@ -175,8 +195,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
           </h1>
           <p className="text-slate-500 mt-1">
             {currentUser.role === Role.MASTER 
-              ? 'Overview of office performance and pending approvals' 
-              : 'Manage your assigned tasks and upload deliverables'}
+              ? 'Manage workflows, assign tasks, and review submissions' 
+              : 'Track your tasks, submit work, and view history'}
           </p>
         </div>
         
@@ -237,7 +257,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
         </div>
       </header>
 
-      {/* --- STATS (Master Only - Original) --- */}
+      {/* --- STATS (Master Only) --- */}
       {currentUser.role === Role.MASTER && viewMode === 'TASKS' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-all">
@@ -245,8 +265,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
                 <AlertCircle className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-slate-500 text-sm font-medium">Pending Requests</p>
-                <p className="text-2xl font-bold text-slate-900">{requests.filter(r => r.status === Status.PENDING).length}</p>
+                <p className="text-slate-500 text-sm font-medium">Review Pending</p>
+                <p className="text-2xl font-bold text-slate-900">{requests.filter(r => r.status === Status.SUBMITTED).length}</p>
               </div>
             </div>
 
@@ -255,8 +275,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-slate-500 text-sm font-medium">Approved Today</p>
-                <p className="text-2xl font-bold text-slate-900">{requests.filter(r => r.status === Status.ASSIGNED).length}</p>
+                <p className="text-slate-500 text-sm font-medium">Finalized</p>
+                <p className="text-2xl font-bold text-slate-900">{requests.filter(r => r.status === Status.FINALIZED).length}</p>
               </div>
             </div>
 
@@ -265,8 +285,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
                 <Calendar className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-slate-500 text-sm font-medium">Event Support</p>
-                <p className="text-2xl font-bold text-slate-900">{requests.filter(r => r.requestTypes.includes(RequestType.EVENT)).length}</p>
+                <p className="text-slate-500 text-sm font-medium">New Requests</p>
+                <p className="text-2xl font-bold text-slate-900">{requests.filter(r => r.status === Status.PENDING).length}</p>
               </div>
             </div>
           </div>
@@ -332,7 +352,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
             </div>
         </div>
 
-        {/* --- CARDS LAYOUT (Original Style) --- */}
+        {/* --- CARDS LAYOUT --- */}
         <div className="grid grid-cols-1 gap-6">
             {filteredRequests.length === 0 ? (
                 <div className="p-16 text-center bg-white rounded-3xl border border-dashed border-slate-300">
@@ -343,7 +363,10 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
             ) : (
                 filteredRequests.map(req => {
                     const task = req.tasks?.find(t => t.assignedToRoleId === currentUser.role);
-                    const isSubmitted = !!task?.driveFolderLink || req.status === Status.SUBMITTED;
+                    // Determine if the specific team has submitted
+                    const isSubmitted = !!task?.driveFolderLink;
+                    // Logic for display
+                    const isChangesRequested = req.status === Status.CHANGES_REQUESTED;
                     
                     return (
                         <div key={req.id} className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow duration-300">
@@ -352,7 +375,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
                                 <div className="flex items-center gap-3">
                                     <span className="bg-white border border-slate-200 text-slate-500 text-xs font-mono px-2 py-1 rounded">#{req.id}</span>
                                     <span className={`px-2 py-1 rounded-full text-xs font-bold border ${getStatusColor(req.status)}`}>
-                                        {req.status}
+                                        {req.status.replace(/([A-Z])/g, ' $1').trim()}
                                     </span>
                                 </div>
                                 <span className="text-xs text-slate-400 font-medium">{new Date(req.submissionDate).toLocaleDateString()}</span>
@@ -380,9 +403,18 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
                                         </div>
                                     </div>
 
+                                    {/* Sub-account Feedback Display */}
+                                    {currentUser.role !== Role.MASTER && isChangesRequested && task?.masterFeedback && (
+                                        <div className="p-4 bg-orange-50 rounded-xl border border-orange-100">
+                                            <p className="text-xs font-bold text-orange-800 uppercase mb-1 flex items-center gap-2"><AlertCircle className="w-4 h-4"/> Changes Requested by Master</p>
+                                            <p className="text-orange-900 text-sm italic">"{task.masterFeedback}"</p>
+                                            <p className="text-xs text-orange-700 mt-2">Please update your work and resubmit.</p>
+                                        </div>
+                                    )}
+
                                     {task?.masterNotes && (
                                         <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
-                                            <p className="text-xs font-bold text-amber-800 uppercase mb-1">Master Admin Note</p>
+                                            <p className="text-xs font-bold text-amber-800 uppercase mb-1">Instruction Note</p>
                                             <p className="text-amber-900 text-sm italic">"{task.masterNotes}"</p>
                                         </div>
                                     )}
@@ -400,33 +432,49 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
                                         ) : <span className="text-xs text-slate-400">Unassigned</span>}
                                     </div>
 
-                                    {currentUser.role === Role.MASTER && req.status === Status.PENDING ? (
-                                        <button 
-                                            onClick={() => { setSelectedRequest(req); setIsAssignModalOpen(true); }}
-                                            className="w-full bg-slate-900 hover:bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-2"
-                                        >
-                                            <UserPlus className="w-5 h-5" /> Assign Team
-                                        </button>
-                                    ) : (
+                                    {/* Master Admin Actions */}
+                                    {currentUser.role === Role.MASTER && (
+                                        <>
+                                            {req.status === Status.PENDING && (
+                                                <button 
+                                                    onClick={() => { setSelectedRequest(req); setIsAssignModalOpen(true); }}
+                                                    className="w-full bg-slate-900 hover:bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-2"
+                                                >
+                                                    <UserPlus className="w-5 h-5" /> Assign Team
+                                                </button>
+                                            )}
+                                            {req.status === Status.SUBMITTED && (
+                                                 <button 
+                                                    onClick={() => { setSelectedRequest(req); setIsReviewModalOpen(true); }}
+                                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-2"
+                                                >
+                                                    <CheckCircle2 className="w-5 h-5" /> Review Work
+                                                </button>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {/* Sub Account Actions */}
+                                    {currentUser.role !== Role.MASTER && currentUser.role !== Role.EMPLOYEE && (
                                        <>
-                                        {isSubmitted ? (
-                                            <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 text-center">
-                                                <CheckCircle2 className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-                                                <p className="text-sm font-bold text-purple-900">Work Submitted</p>
-                                                <div className="flex gap-2 justify-center mt-3">
-                                                    <button onClick={() => handleEditSubmission(req)} className="p-2 bg-white text-slate-600 rounded-lg hover:text-indigo-600 border border-purple-200"><Edit2 className="w-4 h-4"/></button>
-                                                    <button onClick={() => handleDeleteSubmission(req)} className="p-2 bg-white text-slate-600 rounded-lg hover:text-red-600 border border-purple-200"><Trash2 className="w-4 h-4"/></button>
-                                                </div>
-                                            </div>
-                                        ) : currentUser.role !== Role.MASTER && currentUser.role !== Role.EMPLOYEE && (
+                                        {/* Show submit button if never submitted OR changes requested */}
+                                        {(!isSubmitted || isChangesRequested) ? (
                                             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                                                <p className="text-sm text-slate-500 mb-3">Ready to submit?</p>
+                                                <p className="text-sm text-slate-500 mb-3">{isChangesRequested ? 'Ready to resubmit?' : 'Ready to submit?'}</p>
                                                 <button 
                                                     onClick={() => { setSelectedRequest(req); setIsSubmitModalOpen(true); }}
                                                     className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2"
                                                 >
-                                                    <UploadCloud className="w-5 h-5" /> Submit Work
+                                                    <UploadCloud className="w-5 h-5" /> {isChangesRequested ? 'Submit Revision' : 'Submit Work'}
                                                 </button>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 text-center">
+                                                <CheckCircle2 className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+                                                <p className="text-sm font-bold text-purple-900">Submitted for Review</p>
+                                                <div className="flex gap-2 justify-center mt-3">
+                                                    <button onClick={() => handleEditSubmission(req)} className="p-2 bg-white text-slate-600 rounded-lg hover:text-indigo-600 border border-purple-200"><Edit2 className="w-4 h-4"/></button>
+                                                </div>
                                             </div>
                                         )}
                                        </> 
@@ -498,6 +546,58 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
               >
                 <UserPlus className="w-4 h-4" />
                 Assign Tasks
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Review Modal (Master Only) */}
+      {isReviewModalOpen && selectedRequest && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+             <div className="p-6 border-b border-slate-100 bg-slate-50">
+              <h2 className="text-xl font-bold text-slate-800">Review Submission</h2>
+              <p className="text-slate-500 text-sm mt-1">Review work for <span className="font-bold text-slate-800">"{selectedRequest?.taskTitle}"</span>.</p>
+            </div>
+            
+            <div className="p-6 space-y-6">
+                {selectedRequest.tasks?.filter(t => t.driveFolderLink).map(t => (
+                    <div key={t.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <p className="text-xs font-bold uppercase text-slate-400 mb-1">Submission by {t.assignedToRoleId}</p>
+                        <a href={t.driveFolderLink} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-indigo-600 font-medium hover:underline mb-2">
+                             <LinkIcon className="w-4 h-4"/> {t.driveFolderLink}
+                        </a>
+                        {t.employeeSubmissionNotes && <p className="text-sm text-slate-600 italic">"{t.employeeSubmissionNotes}"</p>}
+                    </div>
+                ))}
+                
+                <div>
+                   <label className="block text-xs font-bold uppercase text-slate-400 mb-2 tracking-wider">Review Feedback</label>
+                   <textarea
+                     className="w-full rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 min-h-[100px] text-sm p-3"
+                     placeholder="Enter feedback for rework (required if rejecting)..."
+                     value={reviewFeedback}
+                     onChange={(e) => setReviewFeedback(e.target.value)}
+                   />
+                </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
+              <button onClick={() => setIsReviewModalOpen(false)} className="px-5 py-2.5 text-slate-600 font-bold text-sm hover:bg-slate-200 rounded-xl transition-colors">Cancel</button>
+              
+              <button 
+                onClick={() => handleMasterReview('REJECT')} 
+                className="px-5 py-2.5 bg-orange-100 text-orange-700 font-bold text-sm hover:bg-orange-200 rounded-xl transition-colors flex items-center gap-2"
+              >
+                <ThumbsDown className="w-4 h-4" /> Request Changes
+              </button>
+
+              <button 
+                onClick={() => handleMasterReview('APPROVE')} 
+                className="px-5 py-2.5 bg-green-600 text-white font-bold text-sm hover:bg-green-700 rounded-xl shadow-lg shadow-green-200 transition-colors flex items-center gap-2"
+              >
+                <ThumbsUp className="w-4 h-4" /> Approve
               </button>
             </div>
           </div>

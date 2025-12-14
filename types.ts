@@ -71,6 +71,7 @@ export interface Task {
   assignedByUserId: number;
   masterNotes?: string;
   employeeSubmissionNotes?: string;
+  masterFeedback?: string; // Added for rejection/changes workflow
   driveFolderLink?: string;
   createdAt: string;
   updatedAt: string;
