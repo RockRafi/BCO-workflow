@@ -1,6 +1,6 @@
 import { Request, RequestType, Role, Status, Task, User, HistoryLog, SystemSettings, Notification } from '../types';
 
-// Default Data for Reset/Init
+// Default Data
 const DEFAULT_USERS: User[] = [
   { id: 1, username: 'master_admin', email: 'admin@diu.edu.bd', password: 'admin', role: Role.MASTER, designation: 'Director BCO' },
   { id: 2, username: 'design_lead', email: 'design@diu.edu.bd', password: '123', role: Role.DESIGN, designation: 'Senior Designer' },
@@ -9,7 +9,7 @@ const DEFAULT_USERS: User[] = [
 ];
 
 const DEFAULT_SETTINGS: SystemSettings = {
-  masterDriveLink: 'https://drive.google.com/drive/folders/10W8ljDfwvv_-JJd-uHnp2M2N5a3S3MOw?usp=sharing',
+  masterDriveLink: '',
   masterNotificationEmail: 'admin@diu.edu.bd'
 };
 
@@ -27,17 +27,26 @@ class MockDB {
   private loadFromStorage() {
     if (typeof window === 'undefined') return;
 
-    const storedRequests = localStorage.getItem('bco_requests');
-    const storedTasks = localStorage.getItem('bco_tasks');
-    const storedUsers = localStorage.getItem('bco_users');
-    const storedSettings = localStorage.getItem('bco_settings');
-    const storedNotifs = localStorage.getItem('bco_notifications');
+    try {
+      const storedRequests = localStorage.getItem('bco_requests');
+      const storedTasks = localStorage.getItem('bco_tasks');
+      const storedUsers = localStorage.getItem('bco_users');
+      const storedSettings = localStorage.getItem('bco_settings');
+      const storedNotifs = localStorage.getItem('bco_notifications');
 
-    this.requests = storedRequests ? JSON.parse(storedRequests) : [];
-    this.tasks = storedTasks ? JSON.parse(storedTasks) : [];
-    this.users = storedUsers ? JSON.parse(storedUsers) : DEFAULT_USERS;
-    this.settings = storedSettings ? JSON.parse(storedSettings) : DEFAULT_SETTINGS;
-    this.notifications = storedNotifs ? JSON.parse(storedNotifs) : [];
+      this.requests = storedRequests ? JSON.parse(storedRequests) : [];
+      this.tasks = storedTasks ? JSON.parse(storedTasks) : [];
+      // Merge default users with stored users to ensure admin always exists if storage is corrupted
+      const parsedUsers = storedUsers ? JSON.parse(storedUsers) : [];
+      this.users = parsedUsers.length > 0 ? parsedUsers : DEFAULT_USERS;
+      
+      this.settings = storedSettings ? JSON.parse(storedSettings) : DEFAULT_SETTINGS;
+      this.notifications = storedNotifs ? JSON.parse(storedNotifs) : [];
+    } catch (e) {
+      console.error("Failed to load from storage", e);
+      // Fallback
+      this.users = DEFAULT_USERS;
+    }
   }
 
   private saveToStorage() {
@@ -50,19 +59,14 @@ class MockDB {
   }
 
   // --- SETTINGS & USERS ---
-
-  getSettings(): SystemSettings {
-    return this.settings;
-  }
+  getSettings(): SystemSettings { return this.settings; }
 
   updateSettings(newSettings: SystemSettings) {
     this.settings = newSettings;
     this.saveToStorage();
   }
 
-  getUsers(): User[] {
-    return this.users;
-  }
+  getUsers(): User[] { return this.users; }
 
   addUser(user: Omit<User, 'id'>) {
     const newUser = { ...user, id: Date.now() };
@@ -71,23 +75,19 @@ class MockDB {
     return newUser;
   }
 
-  updateUser(id: number, data: Partial<User>) {
-    const idx = this.users.findIndex(u => u.id === id);
-    if (idx !== -1) {
-      this.users[idx] = { ...this.users[idx], ...data };
-      this.saveToStorage();
-    }
-  }
-
   deleteUser(id: number) {
     this.users = this.users.filter(u => u.id !== id);
     this.saveToStorage();
   }
 
-  // --- REQUESTS ---
+  getUser(id: number) { return this.users.find(u => u.id === id); }
 
+  authenticate(username: string, pass: string): User | undefined {
+    return this.users.find(u => u.username === username && u.password === pass);
+  }
+
+  // --- REQUESTS ---
   getRequests(): Request[] {
-    // Hydrate requests with task info
     return this.requests.map(req => ({
       ...req,
       tasks: this.tasks.filter(t => t.requestId === req.id)
@@ -98,44 +98,32 @@ class MockDB {
     const newReq: Request = {
       ...req,
       taskTitle: req.taskTitle || 'Untitled Request',
-      id: Math.floor(Math.random() * 100000),
+      id: Math.floor(Math.random() * 100000) + Date.now(), // Ensure unique ID
       status: Status.PENDING,
       submissionDate: new Date().toISOString(),
       history: [{
         id: Math.random(),
-        action: 'Created',
+        action: 'Request Created',
         timestamp: new Date().toISOString(),
-        actorName: req.requesterName
+        actorName: req.requesterName,
+        details: 'Submitted via Public Portal'
       }]
     };
     this.requests.unshift(newReq);
-    
-    // Notify Master
-    this.addNotification(Role.MASTER, `New Request #${newReq.id}: ${newReq.taskTitle}`, 'info');
-    
+    this.addNotification(Role.MASTER, `New Request: ${newReq.taskTitle}`, 'info');
     this.saveToStorage();
     return newReq;
   }
 
   // --- TASKS ---
-
   assignTask(requestId: number, assignedBy: number, assignedToRole: Role, notes: string): Task {
     const request = this.requests.find(r => r.id === requestId);
     const assigner = this.users.find(u => u.id === assignedBy);
 
     if (request) {
-      // Don't overwrite if already assigned to others, just update status
-      if (request.status !== Status.ASSIGNED) {
-         request.status = Status.ASSIGNED;
-      }
+      if (request.status !== Status.ASSIGNED) request.status = Status.ASSIGNED;
       
-      request.history?.push({
-        id: Math.random(),
-        action: 'Assigned',
-        timestamp: new Date().toISOString(),
-        actorName: assigner?.username || 'Unknown',
-        details: `Assigned to ${assignedToRole}`
-      });
+      this.logHistory(request.id, 'Task Assigned', assigner?.username || 'Admin', `Assigned to ${assignedToRole}`);
     }
 
     const newTask: Task = {
@@ -148,10 +136,7 @@ class MockDB {
       updatedAt: new Date().toISOString(),
     };
     this.tasks.push(newTask);
-    
-    // Notify Team
-    this.addNotification(assignedToRole, `New Task Assigned: ${request?.taskTitle || 'Request #' + requestId}`, 'alert');
-    
+    this.addNotification(assignedToRole, `New Task: ${request?.taskTitle}`, 'alert');
     this.saveToStorage();
     return newTask;
   }
@@ -165,21 +150,9 @@ class MockDB {
       
       const req = this.requests.find(r => r.id === task.requestId);
       if (req) {
-        // Check if all tasks are submitted? For now just set to Submitted
         req.status = Status.SUBMITTED;
-        req.history?.push({
-            id: Math.random(),
-            action: 'Work Submitted',
-            timestamp: new Date().toISOString(),
-            actorName: `${task.assignedToRoleId} Team`,
-            details: 'Deliverables uploaded to Drive'
-        });
-
-        // Notify Master
-        this.addNotification(Role.MASTER, `Work Submitted for #${req.id} (${req.taskTitle}) by ${task.assignedToRoleId}`, 'success');
-        
-        // Simulate Email to Master
-        console.log(`Sending email to ${this.settings.masterNotificationEmail}: Work Submitted for #${req.id}`);
+        this.logHistory(req.id, 'Work Submitted', `${task.assignedToRoleId} Team`, 'Link added');
+        this.addNotification(Role.MASTER, `Submission: ${req.taskTitle}`, 'success');
       }
       this.saveToStorage();
     }
@@ -190,12 +163,44 @@ class MockDB {
      if (task) {
         task.driveFolderLink = undefined;
         task.employeeSubmissionNotes = undefined;
-        // Optionally revert status if all tasks are un-submitted
         this.saveToStorage();
      }
   }
 
-  // --- NOTIFICATIONS ---
+  // --- HISTORY & NOTIFICATIONS ---
+
+  logHistory(requestId: number, action: string, actor: string, details?: string) {
+    const req = this.requests.find(r => r.id === requestId);
+    if (req) {
+        if (!req.history) req.history = [];
+        req.history.unshift({
+            id: Date.now() + Math.random(),
+            action,
+            timestamp: new Date().toISOString(),
+            actorName: actor,
+            details
+        });
+        this.saveToStorage();
+    }
+  }
+
+  // Get aggregated history for the dashboard view
+  getAllHistory(userRole: Role): HistoryLog[] {
+    let allHistory: HistoryLog[] = [];
+    
+    this.requests.forEach(req => {
+        // Filter: Master sees all, Employees see none (usually), Teams see their assignments
+        const relevant = userRole === Role.MASTER 
+            ? true 
+            : this.tasks.some(t => t.requestId === req.id && t.assignedToRoleId === userRole);
+
+        if (relevant && req.history) {
+            allHistory = [...allHistory, ...req.history.map(h => ({...h, requestId: req.id, taskTitle: req.taskTitle}))];
+        }
+    });
+
+    return allHistory.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
 
   addNotification(role: Role, message: string, type: 'info' | 'success' | 'alert') {
     this.notifications.unshift({
@@ -215,19 +220,7 @@ class MockDB {
 
   markNotificationRead(id: number) {
     const n = this.notifications.find(n => n.id === id);
-    if (n) { 
-        n.isRead = true; 
-        this.saveToStorage();
-    }
-  }
-
-  getUser(id: number) {
-    return this.users.find(u => u.id === id);
-  }
-
-  authenticate(username: string, pass: string): User | undefined {
-    // Simple plain text check for mock
-    return this.users.find(u => u.username === username && u.password === pass);
+    if (n) { n.isRead = true; this.saveToStorage(); }
   }
 }
 

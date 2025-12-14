@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Request, Task, Role, Status, RequestType, Notification } from '../types';
+import { Request, Task, Role, Status, RequestType, Notification, User } from '../types';
 import { db } from '../services/mockDb';
-import { Clock, CheckCircle2, AlertCircle, FileText, ChevronRight, MoreHorizontal, Send, ExternalLink, Calendar, Eye, UserPlus, X, UploadCloud, HardDrive, Phone, Filter, Search, History, Bell, Edit2, Trash2, FolderOpen, FileIcon } from 'lucide-react';
+import { 
+  Clock, CheckCircle2, AlertCircle, FileText, ChevronRight, MoreHorizontal, Send, 
+  ExternalLink, Calendar, Eye, UserPlus, X, UploadCloud, Link as LinkIcon, 
+  Filter, Search, History, Bell, Edit2, Trash2, FolderOpen, Activity, PlayCircle
+} from 'lucide-react';
 
 interface DashboardProps {
-  currentUser: { id: number; role: Role };
+  currentUser: User;
 }
 
+type ViewMode = 'TASKS' | 'HISTORY';
+
 const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
+  const [viewMode, setViewMode] = useState<ViewMode>('TASKS');
   const [requests, setRequests] = useState<Request[]>([]);
+  const [historyLogs, setHistoryLogs] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<Request[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
@@ -28,22 +36,21 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
 
   // Form State
   const [assignNotes, setAssignNotes] = useState('');
-  // Multi-select for teams
   const [assignTargetRoles, setAssignTargetRoles] = useState<Role[]>([]);
   
+  // Submission State
   const [submissionLink, setSubmissionLink] = useState('');
   const [submissionNotes, setSubmissionNotes] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     refreshData();
-  }, [currentUser, isAssignModalOpen, isSubmitModalOpen]); // Auto refresh on modal close
+  }, [currentUser, isAssignModalOpen, isSubmitModalOpen]); 
 
   // --- DATA REFRESH ---
   const refreshData = () => {
     const allRequests = db.getRequests();
     setNotifications(db.getNotifications(currentUser.role));
+    setHistoryLogs(db.getAllHistory(currentUser.role));
     
     if (currentUser.role === Role.MASTER) {
       setRequests(allRequests);
@@ -129,38 +136,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
      }
   };
 
-  const handleMockDriveUpload = () => {
-    setIsUploading(true);
-    setUploadProgress(0);
-    
-    // Simulate upload progress
-    const interval = setInterval(() => {
-       setUploadProgress(prev => {
-          if(prev >= 100) {
-             clearInterval(interval);
-             return 100;
-          }
-          return prev + 10;
-       });
-    }, 150);
-
-    // Simulate completion
-    setTimeout(() => {
-      const simulatedPath = `${settings.masterDriveLink}&path=${currentUser.role}/${new Date().toISOString().split('T')[0]}/Task_${selectedRequest?.id}`;
-      setSubmissionLink(simulatedPath);
-      setIsUploading(false);
-    }, 1800);
-  };
-
   const markRead = (id: number) => {
       db.markNotificationRead(id);
       setNotifications(notifications.map(n => n.id === id ? {...n, isRead: true} : n));
   };
 
-  // --- STATS ---
-  const pendingCount = requests.filter(r => r.status === Status.PENDING).length;
-  const approvedTodayCount = requests.filter(r => r.status === Status.ASSIGNED || r.status === Status.APPROVED_BY_MASTER).length;
-  const eventsTodayCount = requests.filter(r => r.requestTypes.includes(RequestType.EVENT)).length;
+  // --- HELPER UI ---
 
   const getStatusColor = (status: Status) => {
     switch (status) {
@@ -170,6 +151,15 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
       case Status.FINALIZED: return 'bg-green-100 text-green-700 border-green-200';
       case Status.REJECTED: return 'bg-red-100 text-red-700 border-red-200';
       default: return 'bg-slate-100 text-slate-700';
+    }
+  };
+
+  const getNotificationIcon = (type: string) => {
+    switch(type) {
+        case 'info': return <PlayCircle className="w-5 h-5 text-blue-500" />;
+        case 'success': return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
+        case 'alert': return <AlertCircle className="w-5 h-5 text-amber-500" />;
+        default: return <Bell className="w-5 h-5 text-slate-500" />;
     }
   };
 
@@ -190,44 +180,65 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
           </p>
         </div>
         
-        {/* Notification Bell */}
-        <div className="relative">
-             <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="p-3 bg-white border border-slate-200 rounded-full hover:bg-slate-50 relative"
-             >
-                 <Bell className="w-5 h-5 text-slate-600" />
-                 {unreadCount > 0 && (
-                     <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white"></span>
-                 )}
-             </button>
+        <div className="flex items-center gap-4">
+             {/* View Mode Toggle */}
+             <div className="flex bg-slate-100 p-1 rounded-xl">
+                <button 
+                  onClick={() => setViewMode('TASKS')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'TASKS' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+                >
+                  Tasks
+                </button>
+                <button 
+                  onClick={() => setViewMode('HISTORY')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'HISTORY' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+                >
+                  History
+                </button>
+             </div>
 
-             {/* Dropdown */}
-             {showNotifications && (
-                 <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 z-50 overflow-hidden">
-                     <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                         <h3 className="font-bold text-slate-700 text-sm">Notifications</h3>
-                         <span className="text-xs text-slate-400">{unreadCount} new</span>
-                     </div>
-                     <div className="max-h-64 overflow-y-auto">
-                        {notifications.length === 0 ? (
-                            <p className="p-4 text-center text-xs text-slate-400">No notifications</p>
-                        ) : (
-                            notifications.map(n => (
-                                <div key={n.id} onClick={() => markRead(n.id)} className={`p-3 border-b border-slate-50 cursor-pointer hover:bg-slate-50 transition-colors ${!n.isRead ? 'bg-indigo-50/50' : ''}`}>
-                                    <p className={`text-sm ${!n.isRead ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>{n.message}</p>
-                                    <p className="text-xs text-slate-400 mt-1">{new Date(n.timestamp).toLocaleTimeString()}</p>
-                                </div>
-                            ))
-                        )}
-                     </div>
-                 </div>
-             )}
+             {/* Notification Bell */}
+            <div className="relative">
+                <button 
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className="p-3 bg-white border border-slate-200 rounded-full hover:bg-slate-50 relative"
+                >
+                    <Bell className="w-5 h-5 text-slate-600" />
+                    {unreadCount > 0 && (
+                        <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white"></span>
+                    )}
+                </button>
+
+                {/* Dropdown */}
+                {showNotifications && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 z-50 overflow-hidden">
+                        <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                            <h3 className="font-bold text-slate-700 text-sm">Notifications</h3>
+                            <button onClick={() => setNotifications([])} className="text-xs text-indigo-600 hover:underline">Clear</button>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                            {notifications.length === 0 ? (
+                                <p className="p-4 text-center text-xs text-slate-400">No notifications</p>
+                            ) : (
+                                notifications.map(n => (
+                                    <div key={n.id} onClick={() => markRead(n.id)} className={`p-3 border-b border-slate-50 cursor-pointer hover:bg-slate-50 transition-colors flex gap-3 ${!n.isRead ? 'bg-indigo-50/50' : ''}`}>
+                                        <div className="mt-0.5">{getNotificationIcon(n.type)}</div>
+                                        <div>
+                                            <p className={`text-sm ${!n.isRead ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>{n.message}</p>
+                                            <p className="text-xs text-slate-400 mt-1">{new Date(n.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
       </header>
 
-      {/* --- STATS (Master Only) --- */}
-      {currentUser.role === Role.MASTER && (
+      {/* --- STATS (Master Only - Original) --- */}
+      {currentUser.role === Role.MASTER && viewMode === 'TASKS' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-all">
               <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
@@ -235,7 +246,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
               </div>
               <div>
                 <p className="text-slate-500 text-sm font-medium">Pending Requests</p>
-                <p className="text-2xl font-bold text-slate-900">{pendingCount}</p>
+                <p className="text-2xl font-bold text-slate-900">{requests.filter(r => r.status === Status.PENDING).length}</p>
               </div>
             </div>
 
@@ -245,7 +256,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
               </div>
               <div>
                 <p className="text-slate-500 text-sm font-medium">Approved Today</p>
-                <p className="text-2xl font-bold text-slate-900">{approvedTodayCount}</p>
+                <p className="text-2xl font-bold text-slate-900">{requests.filter(r => r.status === Status.ASSIGNED).length}</p>
               </div>
             </div>
 
@@ -255,230 +266,200 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
               </div>
               <div>
                 <p className="text-slate-500 text-sm font-medium">Event Support</p>
-                <p className="text-2xl font-bold text-slate-900">{eventsTodayCount}</p>
+                <p className="text-2xl font-bold text-slate-900">{requests.filter(r => r.requestTypes.includes(RequestType.EVENT)).length}</p>
               </div>
             </div>
           </div>
       )}
-
-      {/* --- FILTERS --- */}
-      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Search ID, Title, Office..." 
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-slate-500" />
-          <select 
-            className="px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-600 focus:outline-none"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="ALL">All Status</option>
-            {Object.values(Status).map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </div>
-         <button onClick={refreshData} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors">
-            Refresh
-         </button>
-      </div>
-
-      {/* --- CONTENT SECTION --- */}
       
-      {/* Master View: Data Table */}
-      {currentUser.role === Role.MASTER ? (
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase tracking-wider text-slate-500">
-                  <th className="px-6 py-4 font-semibold">ID</th>
-                  <th className="px-6 py-4 font-semibold">Title / Requester</th>
-                  <th className="px-6 py-4 font-semibold">Types</th>
-                  <th className="px-6 py-4 font-semibold">Status</th>
-                  <th className="px-6 py-4 font-semibold">Assigned To</th>
-                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredRequests.length === 0 ? (
-                   <tr>
-                     <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
-                       No requests found matching filters.
-                     </td>
-                   </tr>
-                ) : (
-                  filteredRequests.map((req) => (
-                    <tr key={req.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4 text-sm font-medium text-slate-600">#{req.id}</td>
-                      <td className="px-6 py-4 text-sm text-slate-900">
-                        <div className="font-bold text-slate-800">{req.taskTitle || 'Untitled'}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">{req.requesterName} • {req.officeName}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-600">
-                        <div className="flex flex-wrap gap-1">
-                          {req.requestTypes.map(type => (
-                            <span key={type} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
-                              {type}
-                            </span>
-                          ))}
+      {/* --- CONTENT --- */}
+      
+      {viewMode === 'HISTORY' ? (
+         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-8">
+            <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-indigo-600" /> Recent Activity Log
+            </h2>
+            <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-300 before:to-transparent">
+                {historyLogs.map((log, idx) => (
+                    <div key={idx} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                        <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-slate-50 group-[.is-active]:bg-indigo-600 group-[.is-active]:text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
+                            <Clock className="w-4 h-4" />
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-md text-xs font-bold border ${getStatusColor(req.status)}`}>
-                          {req.status}
-                        </span>
-                      </td>
-                       <td className="px-6 py-4">
-                        <div className="flex -space-x-2">
-                           {req.tasks && req.tasks.length > 0 ? (
-                             req.tasks.map((t, idx) => (
-                               <div key={idx} className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-xs font-bold text-slate-600" title={t.assignedToRoleId}>
-                                 {t.assignedToRoleId.substring(0,2)}
-                               </div>
-                             ))
-                           ) : <span className="text-xs text-slate-400">Unassigned</span>}
+                        <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                            <div className="flex items-center justify-between space-x-2 mb-1">
+                                <div className="font-bold text-slate-900">{log.action}</div>
+                                <time className="font-mono text-xs font-medium text-slate-500">{new Date(log.timestamp).toLocaleDateString()}</time>
+                            </div>
+                            <div className="text-slate-500 text-sm">
+                                <span className="font-semibold text-indigo-600">{log.actorName}</span> • {log.details}
+                                {log.taskTitle && <div className="mt-1 text-xs bg-slate-100 inline-block px-2 py-1 rounded text-slate-600">{log.taskTitle}</div>}
+                            </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button 
-                            onClick={() => { setSelectedRequest(req); setIsViewModalOpen(true); }}
-                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          {req.status === Status.PENDING && (
-                            <button 
-                              onClick={() => { setSelectedRequest(req); setIsAssignModalOpen(true); }}
-                              className="flex items-center gap-1 bg-slate-900 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
-                            >
-                              <UserPlus className="w-3 h-3" />
-                              Assign
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : (
-        /* --- Employee/Team View --- */
-        <div className="grid grid-cols-1 gap-6">
-          {filteredRequests.length === 0 ? (
-             <div className="p-16 text-center bg-white rounded-3xl border border-dashed border-slate-300 col-span-1">
-              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
-                <FolderOpen className="w-8 h-8" />
-              </div>
-              <h3 className="text-lg font-medium text-slate-900">Workspace Empty</h3>
-              <p className="text-slate-500">No active tasks assigned to the {currentUser.role} team.</p>
+                    </div>
+                ))}
+                {historyLogs.length === 0 && <p className="text-center text-slate-400 py-10">No history available yet.</p>}
             </div>
-          ) : (
-            filteredRequests.map((req) => {
-              const task = req.tasks?.find(t => t.assignedToRoleId === currentUser.role);
-              const isSubmitted = !!task?.driveFolderLink;
-
-              return (
-              <div key={req.id} className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow duration-300">
-                 {/* Card Header */}
-                 <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                       <span className="bg-white border border-slate-200 text-slate-500 text-xs font-mono px-2 py-1 rounded">#{req.id}</span>
-                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${isSubmitted ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                         {isSubmitted ? 'SUBMITTED' : 'IN PROGRESS'}
-                       </span>
-                    </div>
-                    <span className="text-xs text-slate-400 font-medium">{new Date(req.submissionDate).toLocaleDateString()}</span>
-                 </div>
-
-                 <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Details */}
-                    <div className="lg:col-span-2 space-y-4">
-                       <div>
-                          <h3 className="text-xl font-bold text-slate-900 leading-snug">{req.taskTitle}</h3>
-                          <p className="text-sm text-slate-500 mt-2 leading-relaxed">{req.requestDetails}</p>
-                          <div className="flex flex-wrap gap-2 mt-3">
-                             {req.requestTypes.map(t => <span key={t} className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-md">{t}</span>)}
-                          </div>
-                       </div>
-                       
-                       <div className="grid grid-cols-2 gap-4 text-sm text-slate-500 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                          <div>
-                             <span className="block text-xs font-bold uppercase text-slate-400">Requester</span>
-                             <span className="text-slate-900 font-medium">{req.requesterName}</span>
-                          </div>
-                          <div>
-                             <span className="block text-xs font-bold uppercase text-slate-400">Contact</span>
-                             <span className="text-slate-900">{req.mobileNo}</span>
-                          </div>
-                       </div>
-
-                       {task?.masterNotes && (
-                         <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
-                            <p className="text-xs font-bold text-amber-800 uppercase mb-1">Master Admin Note</p>
-                            <p className="text-amber-900 text-sm italic">"{task.masterNotes}"</p>
-                         </div>
-                       )}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex flex-col justify-end space-y-3">
-                        {isSubmitted ? (
-                           <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 text-center">
-                              <CheckCircle2 className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-                              <p className="text-sm font-bold text-purple-900">Work Uploaded</p>
-                              <p className="text-xs text-purple-700 mb-3">Files sent to Master Drive</p>
-                              <div className="flex gap-2 justify-center">
-                                 <button onClick={() => handleEditSubmission(req)} className="p-2 bg-white text-slate-600 rounded-lg hover:text-indigo-600 border border-purple-200"><Edit2 className="w-4 h-4"/></button>
-                                 <button onClick={() => handleDeleteSubmission(req)} className="p-2 bg-white text-slate-600 rounded-lg hover:text-red-600 border border-purple-200"><Trash2 className="w-4 h-4"/></button>
-                                 <a href={task.driveFolderLink} target="_blank" rel="noreferrer" className="p-2 bg-white text-slate-600 rounded-lg hover:text-green-600 border border-purple-200"><ExternalLink className="w-4 h-4"/></a>
-                              </div>
-                           </div>
-                        ) : (
-                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                             <p className="text-sm text-slate-500 mb-3">Ready to submit deliverables?</p>
-                             <button 
-                                onClick={() => { setSelectedRequest(req); setIsSubmitModalOpen(true); }}
-                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2"
-                             >
-                                <UploadCloud className="w-5 h-5" /> Submit Work
-                             </button>
-                          </div>
-                        )}
-                    </div>
-                 </div>
-              </div>
-            )})
-          )}
+         </div>
+      ) : (
+        <>
+        {/* --- FILTERS --- */}
+        <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                <input 
+                    type="text" 
+                    placeholder="Search tasks..." 
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+            <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-slate-500" />
+                <select 
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-600 focus:outline-none cursor-pointer"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                    <option value="ALL">All Status</option>
+                    {Object.values(Status).map(s => (
+                    <option key={s} value={s}>{s}</option>
+                    ))}
+                </select>
+                <button onClick={refreshData} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors">
+                    Refresh
+                </button>
+            </div>
         </div>
+
+        {/* --- CARDS LAYOUT (Original Style) --- */}
+        <div className="grid grid-cols-1 gap-6">
+            {filteredRequests.length === 0 ? (
+                <div className="p-16 text-center bg-white rounded-3xl border border-dashed border-slate-300">
+                    <FolderOpen className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-slate-900">No Tasks Found</h3>
+                    <p className="text-slate-500">Try adjusting your filters.</p>
+                </div>
+            ) : (
+                filteredRequests.map(req => {
+                    const task = req.tasks?.find(t => t.assignedToRoleId === currentUser.role);
+                    const isSubmitted = !!task?.driveFolderLink || req.status === Status.SUBMITTED;
+                    
+                    return (
+                        <div key={req.id} className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                            {/* Card Header */}
+                            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <span className="bg-white border border-slate-200 text-slate-500 text-xs font-mono px-2 py-1 rounded">#{req.id}</span>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-bold border ${getStatusColor(req.status)}`}>
+                                        {req.status}
+                                    </span>
+                                </div>
+                                <span className="text-xs text-slate-400 font-medium">{new Date(req.submissionDate).toLocaleDateString()}</span>
+                            </div>
+
+                            <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                {/* Details */}
+                                <div className="lg:col-span-2 space-y-4">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-slate-900 leading-snug">{req.taskTitle}</h3>
+                                        <p className="text-sm text-slate-500 mt-2 leading-relaxed">{req.requestDetails}</p>
+                                        <div className="flex flex-wrap gap-2 mt-3">
+                                            {req.requestTypes.map(t => <span key={t} className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-md">{t}</span>)}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 text-sm text-slate-500 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                                        <div>
+                                            <span className="block text-xs font-bold uppercase text-slate-400">Requester</span>
+                                            <span className="text-slate-900 font-medium">{req.requesterName}</span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-xs font-bold uppercase text-slate-400">Contact</span>
+                                            <span className="text-slate-900">{req.mobileNo}</span>
+                                        </div>
+                                    </div>
+
+                                    {task?.masterNotes && (
+                                        <div className="p-4 bg-amber-50 rounded-xl border border-amber-100">
+                                            <p className="text-xs font-bold text-amber-800 uppercase mb-1">Master Admin Note</p>
+                                            <p className="text-amber-900 text-sm italic">"{task.masterNotes}"</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex flex-col justify-end space-y-3">
+                                     <div className="flex -space-x-2 justify-center lg:justify-end mb-4 lg:mb-0">
+                                        {req.tasks && req.tasks.length > 0 ? (
+                                            req.tasks.map((t, idx) => (
+                                                <div key={idx} className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-xs font-bold text-slate-600" title={t.assignedToRoleId}>
+                                                    {t.assignedToRoleId.substring(0,2)}
+                                                </div>
+                                            ))
+                                        ) : <span className="text-xs text-slate-400">Unassigned</span>}
+                                    </div>
+
+                                    {currentUser.role === Role.MASTER && req.status === Status.PENDING ? (
+                                        <button 
+                                            onClick={() => { setSelectedRequest(req); setIsAssignModalOpen(true); }}
+                                            className="w-full bg-slate-900 hover:bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <UserPlus className="w-5 h-5" /> Assign Team
+                                        </button>
+                                    ) : (
+                                       <>
+                                        {isSubmitted ? (
+                                            <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 text-center">
+                                                <CheckCircle2 className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+                                                <p className="text-sm font-bold text-purple-900">Work Submitted</p>
+                                                <div className="flex gap-2 justify-center mt-3">
+                                                    <button onClick={() => handleEditSubmission(req)} className="p-2 bg-white text-slate-600 rounded-lg hover:text-indigo-600 border border-purple-200"><Edit2 className="w-4 h-4"/></button>
+                                                    <button onClick={() => handleDeleteSubmission(req)} className="p-2 bg-white text-slate-600 rounded-lg hover:text-red-600 border border-purple-200"><Trash2 className="w-4 h-4"/></button>
+                                                </div>
+                                            </div>
+                                        ) : currentUser.role !== Role.MASTER && currentUser.role !== Role.EMPLOYEE && (
+                                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
+                                                <p className="text-sm text-slate-500 mb-3">Ready to submit?</p>
+                                                <button 
+                                                    onClick={() => { setSelectedRequest(req); setIsSubmitModalOpen(true); }}
+                                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2"
+                                                >
+                                                    <UploadCloud className="w-5 h-5" /> Submit Work
+                                                </button>
+                                            </div>
+                                        )}
+                                       </> 
+                                    )}
+                                    <button 
+                                        onClick={() => { setSelectedRequest(req); setIsViewModalOpen(true); }}
+                                        className="w-full bg-white border border-slate-200 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all"
+                                    >
+                                        View Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })
+            )}
+        </div>
+        </>
       )}
 
       {/* --- MODALS --- */}
 
-      {/* Assign Modal (Multi-Select) */}
+      {/* Assign Modal */}
       {isAssignModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-slate-100 bg-slate-50">
               <h2 className="text-xl font-bold text-slate-800">Assign Teams</h2>
-              <p className="text-slate-500 text-sm mt-1">Select one or more teams for <span className="font-bold text-slate-800">"{selectedRequest?.taskTitle}"</span>.</p>
+              <p className="text-slate-500 text-sm mt-1">Select teams for <span className="font-bold text-slate-800">"{selectedRequest?.taskTitle}"</span>.</p>
             </div>
             <div className="p-6 space-y-6">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-3">Select Teams</label>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-3 tracking-wider">Select Teams</label>
                 <div className="grid grid-cols-2 gap-3">
                   {[Role.DESIGN, Role.PR, Role.MEDIA_LAB, Role.SOCIAL_MEDIA].map(role => (
                     <button
@@ -490,7 +471,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
                           : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
-                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${assignTargetRoles.includes(role) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${assignTargetRoles.includes(role) ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
                          {assignTargetRoles.includes(role) && <CheckCircle2 className="w-3 h-3 text-white" />}
                       </div>
                       <span className="font-semibold text-sm">{role}</span>
@@ -499,7 +480,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Instructions</label>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-2 tracking-wider">Instructions</label>
                 <textarea
                   className="w-full rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 min-h-[100px] text-sm p-3"
                   placeholder="Notes for the assigned teams..."
@@ -509,175 +490,180 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
               </div>
             </div>
             <div className="p-4 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
-              <button onClick={() => {setIsAssignModalOpen(false); setAssignTargetRoles([]);}} className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-200 rounded-full transition-colors">Cancel</button>
+              <button onClick={() => {setIsAssignModalOpen(false); setAssignTargetRoles([]);}} className="px-6 py-3 text-slate-600 font-bold text-sm hover:bg-slate-200 rounded-xl transition-colors">Cancel</button>
               <button 
                 onClick={handleAssign} 
                 disabled={assignTargetRoles.length === 0}
-                className="px-5 py-2.5 bg-indigo-600 text-white font-bold hover:bg-indigo-700 rounded-full shadow-lg shadow-indigo-200 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-3 bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-200 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <UserPlus className="w-4 h-4" />
-                Assign ({assignTargetRoles.length})
+                Assign Tasks
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Submit Work Modal (Enhanced with Simulated Upload) */}
+      {/* Submit Work Modal (Link Only) */}
       {isSubmitModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
              <div className="p-6 border-b border-slate-100 bg-slate-50">
               <h2 className="text-xl font-bold text-slate-800">Submit Deliverables</h2>
-              <p className="text-slate-500 text-sm mt-1">Upload files for <span className="font-semibold">"{selectedRequest?.taskTitle}"</span>.</p>
+              <p className="text-slate-500 text-sm mt-1">Provide access link for <span className="font-semibold">"{selectedRequest?.taskTitle}"</span>.</p>
             </div>
             <div className="p-6 space-y-6">
                
+               <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm text-blue-800">
+                  <p className="font-bold flex items-center gap-2 mb-1"><LinkIcon className="w-4 h-4"/> Submission Method</p>
+                  <p>Please upload your files to Vercel Storage, Google Drive, or Dropbox and paste the shareable link below.</p>
+               </div>
+
                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Upload Files</label>
-                  
-                  {/* File Upload Dropzone Simulation */}
-                  <div 
-                    onClick={() => { if(!submissionLink) handleMockDriveUpload(); }}
-                    className={`
-                      border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer relative overflow-hidden
-                      ${submissionLink ? 'border-green-200 bg-green-50' : 'border-slate-300 hover:border-indigo-400 hover:bg-slate-50'}
-                      ${isUploading ? 'pointer-events-none opacity-80' : ''}
-                    `}
-                  >
-                     {isUploading ? (
-                        <div className="flex flex-col items-center justify-center py-2">
-                           <div className="w-12 h-12 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin mb-3"></div>
-                           <p className="text-sm font-bold text-slate-700">Uploading to Master Drive...</p>
-                           <p className="text-xs text-slate-500 mt-1">{uploadProgress}% Complete</p>
-                        </div>
-                     ) : submissionLink ? (
-                        <div className="flex flex-col items-center justify-center py-2">
-                           <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3">
-                              <CheckCircle2 className="w-6 h-6" />
-                           </div>
-                           <p className="text-sm font-bold text-green-800">Files Uploaded Successfully</p>
-                           <p className="text-xs text-green-600 mt-1 mb-3">Your files are now stored in the Master Drive.</p>
-                           
-                           <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-green-200 max-w-full">
-                              <ExternalLink className="w-4 h-4 text-green-500 flex-shrink-0" />
-                              <span className="text-xs text-slate-500 truncate">{submissionLink}</span>
-                           </div>
-                        </div>
-                     ) : (
-                        <div className="flex flex-col items-center justify-center py-4 group">
-                           <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                              <UploadCloud className="w-6 h-6" />
-                           </div>
-                           <p className="text-sm font-bold text-slate-700">Click to Upload Files</p>
-                           <p className="text-xs text-slate-400 mt-1">Drag and drop or browse</p>
-                        </div>
-                     )}
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-2 tracking-wider">File / Folder Link</label>
+                  <div className="relative">
+                    <LinkIcon className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+                    <input 
+                        type="url"
+                        placeholder="https://..."
+                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none font-medium"
+                        value={submissionLink}
+                        onChange={(e) => setSubmissionLink(e.target.value)}
+                    />
                   </div>
                </div>
 
-               {submissionLink && (
-                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Submission Notes</label>
-                    <textarea
-                      className="w-full rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 min-h-[100px] text-sm p-3"
-                      placeholder="Describe the work done..."
-                      value={submissionNotes}
-                      onChange={(e) => setSubmissionNotes(e.target.value)}
-                    />
-                 </div>
-               )}
+               <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-2 tracking-wider">Submission Notes</label>
+                <textarea
+                    className="w-full rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none min-h-[100px] text-sm p-3"
+                    placeholder="Describe the work done..."
+                    value={submissionNotes}
+                    onChange={(e) => setSubmissionNotes(e.target.value)}
+                />
+               </div>
 
             </div>
             <div className="p-4 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
-              <button onClick={() => setIsSubmitModalOpen(false)} className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-200 rounded-full transition-colors">Cancel</button>
+              <button onClick={() => setIsSubmitModalOpen(false)} className="px-6 py-3 text-slate-600 font-bold text-sm hover:bg-slate-200 rounded-xl transition-colors">Cancel</button>
               <button 
                 onClick={handleSubmitWork} 
                 disabled={!submissionLink}
-                className="px-5 py-2.5 bg-indigo-600 text-white font-bold hover:bg-indigo-700 rounded-full shadow-lg shadow-indigo-200 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-3 bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-200 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-4 h-4" />
-                Submit
+                Submit Work
               </button>
             </div>
           </div>
         </div>
       )}
       
-      {/* View Details Modal */}
+      {/* View Details Modal (Full Info) */}
       {isViewModalOpen && selectedRequest && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div>
                 <h2 className="text-xl font-bold text-slate-800">Request Details</h2>
-                <p className="text-slate-500 text-sm">ID: #{selectedRequest.id}</p>
+                <div className="flex items-center gap-2 mt-1">
+                    <span className="bg-slate-200 text-slate-600 text-[10px] font-mono px-2 py-0.5 rounded">#{selectedRequest.id}</span>
+                    <span className="text-slate-400 text-sm">|</span>
+                    <span className="text-slate-500 text-sm">{new Date(selectedRequest.submissionDate).toLocaleString()}</span>
+                </div>
               </div>
               <button onClick={() => setIsViewModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-500">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-8 space-y-8">
-               {/* Header Title */}
-               <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                  <span className="text-xs font-bold text-indigo-500 uppercase tracking-wider">Task Title</span>
-                  <h3 className="text-xl font-bold text-indigo-900 mt-1">{selectedRequest.taskTitle}</h3>
-               </div>
+            
+            <div className="flex-1 overflow-y-auto p-8">
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                   {/* Main Content */}
+                   <div className="md:col-span-2 space-y-8">
+                        <div>
+                            <h3 className="text-2xl font-bold text-slate-900 mb-2">{selectedRequest.taskTitle}</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {selectedRequest.requestTypes.map(t => (
+                                    <span key={t} className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-md font-bold uppercase">{t}</span>
+                                ))}
+                            </div>
+                        </div>
 
-               {/* Requester Info */}
-               <div className="grid grid-cols-2 gap-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Requester</label>
-                    <p className="text-slate-900 font-medium">{selectedRequest.requesterName}</p>
-                    <p className="text-slate-500 text-sm">{selectedRequest.requesterEmail}</p>
-                  </div>
-                  <div>
-                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Contact</label>
-                     <p className="text-slate-900 text-sm"><span className="text-slate-400">Mob:</span> {selectedRequest.mobileNo}</p>
-                     <p className="text-slate-900 text-sm"><span className="text-slate-400">Ext:</span> {selectedRequest.extensionNo}</p>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Office</label>
-                    <p className="text-slate-900 font-medium">{selectedRequest.officeName}</p>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Categories</label>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedRequest.requestTypes.map(t => (
-                        <span key={t} className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-md font-semibold">{t}</span>
-                      ))}
-                    </div>
-                  </div>
-               </div>
-               
-               {/* Description */}
-               <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Description</label>
-                  <p className="text-slate-700 leading-relaxed whitespace-pre-wrap p-4 bg-white border border-slate-200 rounded-xl">{selectedRequest.requestDetails}</p>
-               </div>
+                        <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"><FileText className="w-4 h-4"/> Description</h4>
+                            <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{selectedRequest.requestDetails}</p>
+                        </div>
 
-               {/* History Timeline */}
-               <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 block flex items-center gap-2">
-                    <History className="w-4 h-4" /> Request History
-                  </label>
-                  <div className="relative border-l-2 border-slate-100 ml-2 space-y-6">
-                    {selectedRequest.history?.map((log, idx) => (
-                      <div key={idx} className="ml-6 relative">
-                        <div className="absolute -left-[31px] w-4 h-4 bg-indigo-500 rounded-full border-4 border-white shadow-sm"></div>
-                        <p className="text-sm font-bold text-slate-800">{log.action}</p>
-                        <p className="text-xs text-slate-500">{new Date(log.timestamp).toLocaleString()}</p>
-                        <p className="text-sm text-slate-600 mt-1">
-                          By <span className="font-medium text-indigo-600">{log.actorName}</span> 
-                          {log.details && <span className="text-slate-400"> - {log.details}</span>}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                        {selectedRequest.tasks?.map(task => (
+                            task.driveFolderLink && (
+                                <div key={task.id} className="bg-green-50 rounded-2xl p-6 border border-green-100">
+                                    <h4 className="text-xs font-bold text-green-700 uppercase tracking-wider mb-2 flex items-center gap-2"><CheckCircle2 className="w-4 h-4"/> Submission from {task.assignedToRoleId}</h4>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <a href={task.driveFolderLink} target="_blank" rel="noreferrer" className="text-green-600 hover:underline font-medium break-all">{task.driveFolderLink}</a>
+                                        <ExternalLink className="w-3 h-3 text-green-500" />
+                                    </div>
+                                    {task.employeeSubmissionNotes && <p className="text-sm text-green-800 italic">"{task.employeeSubmissionNotes}"</p>}
+                                </div>
+                            )
+                        ))}
+                   </div>
+
+                   {/* Sidebar Info */}
+                   <div className="space-y-6">
+                        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Contact Info</h4>
+                            
+                            <div className="space-y-4">
+                                <div>
+                                    <p className="text-xs text-slate-400 mb-0.5">Requester</p>
+                                    <p className="font-semibold text-slate-800">{selectedRequest.requesterName}</p>
+                                    <p className="text-xs text-slate-500">{selectedRequest.requesterEmail}</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <p className="text-xs text-slate-400 mb-0.5">Mobile</p>
+                                        <p className="font-medium text-slate-800 text-sm">{selectedRequest.mobileNo}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-400 mb-0.5">Ext.</p>
+                                        <p className="font-medium text-slate-800 text-sm">{selectedRequest.extensionNo}</p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-400 mb-0.5">Department</p>
+                                    <p className="font-medium text-slate-800 text-sm">{selectedRequest.officeName}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-400 mb-0.5">Employee ID</p>
+                                    <p className="font-medium text-slate-800 text-sm">{selectedRequest.employeeID}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Assigned Teams</h4>
+                            <div className="space-y-2">
+                                {selectedRequest.tasks && selectedRequest.tasks.length > 0 ? (
+                                    selectedRequest.tasks.map(t => (
+                                        <div key={t.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
+                                            <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold">
+                                                {t.assignedToRoleId.substring(0,2)}
+                                            </div>
+                                            <span className="text-sm font-medium text-slate-700">{t.assignedToRoleId}</span>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-slate-400 italic">No teams assigned</p>
+                                )}
+                            </div>
+                        </div>
+                   </div>
                </div>
             </div>
-            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 sticky bottom-0 z-10">
-              <button onClick={() => setIsViewModalOpen(false)} className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-200 rounded-full transition-colors">Close</button>
+            
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button onClick={() => setIsViewModalOpen(false)} className="px-6 py-3 bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors shadow-sm">Close Details</button>
             </div>
           </div>
         </div>
