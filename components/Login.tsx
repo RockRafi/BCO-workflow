@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { db } from '../services/mockDb';
+import { Lock, User } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (userId: number) => void;
@@ -7,6 +8,20 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin, onBackToHome }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const user = db.authenticate(username, password);
+    if (user) {
+      onLogin(user.id);
+    } else {
+      setError('Invalid username or password');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
       {/* Background Pattern */}
@@ -31,52 +46,57 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBackToHome }) => {
           ← Back
         </button>
 
-        <div className="text-center mb-10 mt-4">
+        <div className="text-center mb-8 mt-4">
           <div className="w-16 h-16 bg-indigo-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-indigo-200 mb-6">
              <span className="text-white font-bold text-2xl">BCO</span>
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Welcome Back</h1>
-          <p className="text-slate-500 mt-2">Sign in to the Workflow Manager</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Staff Portal</h1>
+          <p className="text-slate-500 mt-2 text-sm">Sign in to manage workflows</p>
         </div>
 
-        <div className="space-y-4">
-           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider text-center mb-2">Select User Persona</p>
-           <button
-            onClick={() => onLogin(1)}
-            className="w-full group relative flex items-center p-4 border border-slate-200 rounded-2xl hover:border-indigo-600 hover:bg-indigo-50 transition-all"
-          >
-            <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-white flex items-center justify-center text-slate-500 group-hover:text-indigo-600 font-bold transition-colors">MA</div>
-            <div className="ml-4 text-left">
-              <p className="font-bold text-slate-800 group-hover:text-indigo-700">Master Admin</p>
-              <p className="text-xs text-slate-500">Approves & Assigns Requests</p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <div className="relative">
+              <User className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Username"
+                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all bg-slate-50 focus:bg-white"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
             </div>
-          </button>
-
-          <button
-            onClick={() => onLogin(2)}
-            className="w-full group relative flex items-center p-4 border border-slate-200 rounded-2xl hover:border-pink-500 hover:bg-pink-50 transition-all"
-          >
-            <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-white flex items-center justify-center text-slate-500 group-hover:text-pink-600 font-bold transition-colors">DT</div>
-            <div className="ml-4 text-left">
-              <p className="font-bold text-slate-800 group-hover:text-pink-700">Design Team</p>
-              <p className="text-xs text-slate-500">Executes Design Tasks</p>
+          </div>
+          <div>
+             <div className="relative">
+              <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+              <input
+                type="password"
+                placeholder="Password"
+                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all bg-slate-50 focus:bg-white"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
             </div>
-          </button>
+          </div>
           
+          {error && <p className="text-red-500 text-sm text-center font-medium">{error}</p>}
+
           <button
-            onClick={() => onLogin(5)} // User 5 is Media Team (MediaLab)
-            className="w-full group relative flex items-center p-4 border border-slate-200 rounded-2xl hover:border-emerald-500 hover:bg-emerald-50 transition-all"
+            type="submit"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-200 transition-all transform active:scale-95"
           >
-             <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-white flex items-center justify-center text-slate-500 group-hover:text-emerald-600 font-bold transition-colors">MT</div>
-            <div className="ml-4 text-left">
-              <p className="font-bold text-slate-800 group-hover:text-emerald-700">Media Team</p>
-              <p className="text-xs text-slate-500">Photo & Video Coverage</p>
-            </div>
+            Sign In
           </button>
-        </div>
-        
-        <div className="mt-8 text-center text-xs text-slate-400">
-          Daffodil International University &copy; 2025
+        </form>
+
+        <div className="mt-8 text-center bg-blue-50 p-4 rounded-xl border border-blue-100">
+          <p className="text-xs font-bold text-blue-800 uppercase mb-2">Default Credentials</p>
+          <div className="text-xs text-blue-600 space-y-1">
+            <p>Master Admin: <span className="font-mono bg-white px-1 rounded">master_admin</span> / <span className="font-mono bg-white px-1 rounded">admin</span></p>
+            <p>Design Team: <span className="font-mono bg-white px-1 rounded">design_lead</span> / <span className="font-mono bg-white px-1 rounded">123</span></p>
+            <p>Media Team: <span className="font-mono bg-white px-1 rounded">media_team</span> / <span className="font-mono bg-white px-1 rounded">123</span></p>
+          </div>
         </div>
       </div>
     </div>

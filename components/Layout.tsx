@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, Role } from '../types';
-import { LayoutDashboard, PlusCircle, LogOut, FileText, Layers, PenTool, Hash, Video } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, LogOut, FileText, Layers, PenTool, Hash, Video, Settings as SettingsIcon } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -12,21 +12,13 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, currentView, onChangeView }) => {
   
-  const getRoleIcon = (role: Role) => {
-    switch (role) {
-      case Role.MASTER: return <Layers className="w-5 h-5" />;
-      case Role.DESIGN: return <PenTool className="w-5 h-5" />;
-      case Role.PR: return <FileText className="w-5 h-5" />;
-      case Role.SOCIAL_MEDIA: return <Hash className="w-5 h-5" />;
-      case Role.MEDIA_LAB: return <Video className="w-5 h-5" />;
-      default: return <LayoutDashboard className="w-5 h-5" />;
-    }
-  };
-
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
     ...(currentUser.role === Role.EMPLOYEE ? [
       { id: 'new-request', label: 'New Request', icon: <PlusCircle className="w-5 h-5" /> }
+    ] : []),
+    ...(currentUser.role === Role.MASTER ? [
+      { id: 'settings', label: 'System Settings', icon: <SettingsIcon className="w-5 h-5" /> }
     ] : [])
   ];
 
@@ -65,11 +57,11 @@ const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout, curren
         <div className="p-4 border-t border-slate-100 mb-2">
           <div className="flex flex-col lg:flex-row items-center lg:gap-3 p-2 rounded-2xl bg-slate-50 border border-slate-100">
             <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">
-              {currentUser.username.substring(0, 2).toUpperCase()}
+              {currentUser.role.substring(0, 2).toUpperCase()}
             </div>
             <div className="hidden lg:block flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-900 truncate">{currentUser.username}</p>
-              <p className="text-xs text-slate-500 truncate">{currentUser.role}</p>
+              <p className="text-xs text-slate-500 truncate">{currentUser.designation}</p>
             </div>
           </div>
           <button 

@@ -29,8 +29,14 @@ export interface User {
   id: number;
   username: string;
   email: string;
+  password?: string; // Added for login simulation
   role: Role;
   designation: string;
+}
+
+export interface SystemSettings {
+  masterDriveLink: string;
+  masterNotificationEmail: string;
 }
 
 export interface Request {
@@ -39,14 +45,14 @@ export interface Request {
   requesterEmail: string;
   employeeID: string;
   officeName: string;
-  extensionNo: string; // Added
-  mobileNo: string;    // Added
-  requestTypes: RequestType[]; // Changed from single to array
+  extensionNo: string;
+  mobileNo: string;
+  requestTypes: RequestType[];
   requestDetails: string;
   status: Status;
-  submissionDate: string; // ISO Date string
+  submissionDate: string;
   tasks?: Task[]; 
-  history?: HistoryLog[]; // Added for timeline
+  history?: HistoryLog[];
 }
 
 export interface HistoryLog {
@@ -67,4 +73,13 @@ export interface Task {
   driveFolderLink?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Notification {
+  id: number;
+  recipientRoleId: Role | 'ALL';
+  message: string;
+  isRead: boolean;
+  timestamp: string;
+  type: 'info' | 'success' | 'alert';
 }
