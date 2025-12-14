@@ -11,6 +11,7 @@ const PublicHome: React.FC<PublicHomeProps> = ({ onLoginClick }) => {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
+    taskTitle: '',
     requesterName: '',
     requesterEmail: '',
     employeeID: '',
@@ -59,7 +60,7 @@ const PublicHome: React.FC<PublicHomeProps> = ({ onLoginClick }) => {
           </div>
           <h2 className="text-3xl font-bold text-slate-900 mb-4">Request Received!</h2>
           <p className="text-slate-500 mb-8 text-lg">
-            Thank you, <b>{formData.requesterName}</b>. Your request has been submitted to the BCO team. You will receive an email update shortly.
+            Thank you, <b>{formData.requesterName}</b>. Your request for "<b>{formData.taskTitle}</b>" has been submitted to the BCO team.
           </p>
           <button 
             onClick={() => window.location.reload()} 
@@ -132,6 +133,18 @@ const PublicHome: React.FC<PublicHomeProps> = ({ onLoginClick }) => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+             <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700">Task Title</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="e.g. Spring Convocation Banner Design"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border-slate-200 border focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none text-lg font-medium"
+                  value={formData.taskTitle}
+                  onChange={(e) => setFormData({...formData, taskTitle: e.target.value})}
+                />
+              </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">Employee ID</label>

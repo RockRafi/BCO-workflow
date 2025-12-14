@@ -41,6 +41,7 @@ export interface SystemSettings {
 
 export interface Request {
   id: number;
+  taskTitle: string; // Added Task Title
   requesterName: string;
   requesterEmail: string;
   employeeID: string;

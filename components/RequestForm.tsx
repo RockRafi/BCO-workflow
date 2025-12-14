@@ -10,6 +10,7 @@ interface RequestFormProps {
 
 const RequestForm: React.FC<RequestFormProps> = ({ onSuccess, currentUser }) => {
   const [formData, setFormData] = useState({
+    taskTitle: '',
     requestTypes: [] as RequestType[],
     requestDetails: '',
     officeName: '',
@@ -35,6 +36,7 @@ const RequestForm: React.FC<RequestFormProps> = ({ onSuccess, currentUser }) => 
         return;
     }
     db.createRequest({
+      taskTitle: formData.taskTitle,
       requesterName: currentUser.username,
       requesterEmail: currentUser.email,
       employeeID: formData.employeeID,
@@ -59,6 +61,18 @@ const RequestForm: React.FC<RequestFormProps> = ({ onSuccess, currentUser }) => 
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
+           <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Task Title</label>
+              <input
+                required
+                type="text"
+                className="w-full rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 transition-all hover:border-indigo-300 font-medium text-lg"
+                placeholder="e.g. Convocation Video Coverage"
+                value={formData.taskTitle}
+                onChange={(e) => setFormData({...formData, taskTitle: e.target.value})}
+              />
+            </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Employee ID</label>

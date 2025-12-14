@@ -97,6 +97,7 @@ class MockDB {
   createRequest(req: Omit<Request, 'id' | 'status' | 'submissionDate' | 'history'>): Request {
     const newReq: Request = {
       ...req,
+      taskTitle: req.taskTitle || 'Untitled Request',
       id: Math.floor(Math.random() * 100000),
       status: Status.PENDING,
       submissionDate: new Date().toISOString(),
@@ -110,7 +111,7 @@ class MockDB {
     this.requests.unshift(newReq);
     
     // Notify Master
-    this.addNotification(Role.MASTER, `New Request #${newReq.id} from ${newReq.requesterName}`, 'info');
+    this.addNotification(Role.MASTER, `New Request #${newReq.id}: ${newReq.taskTitle}`, 'info');
     
     this.saveToStorage();
     return newReq;
@@ -149,7 +150,7 @@ class MockDB {
     this.tasks.push(newTask);
     
     // Notify Team
-    this.addNotification(assignedToRole, `New Task Assigned: Request #${requestId}`, 'alert');
+    this.addNotification(assignedToRole, `New Task Assigned: ${request?.taskTitle || 'Request #' + requestId}`, 'alert');
     
     this.saveToStorage();
     return newTask;
@@ -175,7 +176,7 @@ class MockDB {
         });
 
         // Notify Master
-        this.addNotification(Role.MASTER, `Work Submitted for #${req.id} by ${task.assignedToRoleId}`, 'success');
+        this.addNotification(Role.MASTER, `Work Submitted for #${req.id} (${req.taskTitle}) by ${task.assignedToRoleId}`, 'success');
         
         // Simulate Email to Master
         console.log(`Sending email to ${this.settings.masterNotificationEmail}: Work Submitted for #${req.id}`);

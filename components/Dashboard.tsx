@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Request, Task, Role, Status, RequestType, Notification } from '../types';
 import { db } from '../services/mockDb';
-import { Clock, CheckCircle2, AlertCircle, FileText, ChevronRight, MoreHorizontal, Send, ExternalLink, Calendar, Eye, UserPlus, X, UploadCloud, HardDrive, Phone, Filter, Search, History, Bell, Edit2, Trash2, FolderOpen } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, FileText, ChevronRight, MoreHorizontal, Send, ExternalLink, Calendar, Eye, UserPlus, X, UploadCloud, HardDrive, Phone, Filter, Search, History, Bell, Edit2, Trash2, FolderOpen, FileIcon } from 'lucide-react';
 
 interface DashboardProps {
   currentUser: { id: number; role: Role };
@@ -34,6 +34,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
   const [submissionLink, setSubmissionLink] = useState('');
   const [submissionNotes, setSubmissionNotes] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     refreshData();
@@ -66,7 +67,8 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
       result = result.filter(r => 
         r.requesterName.toLowerCase().includes(lower) || 
         r.id.toString().includes(lower) ||
-        r.officeName.toLowerCase().includes(lower)
+        r.officeName.toLowerCase().includes(lower) ||
+        (r.taskTitle && r.taskTitle.toLowerCase().includes(lower))
       );
     }
     setFilteredRequests(result);
@@ -129,14 +131,25 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
 
   const handleMockDriveUpload = () => {
     setIsUploading(true);
-    // Simulate upload process to the configured Master folder
+    setUploadProgress(0);
+    
+    // Simulate upload progress
+    const interval = setInterval(() => {
+       setUploadProgress(prev => {
+          if(prev >= 100) {
+             clearInterval(interval);
+             return 100;
+          }
+          return prev + 10;
+       });
+    }, 150);
+
+    // Simulate completion
     setTimeout(() => {
-      // In a real app, this would be the actual file link. 
-      // For now we use the master link + mock path structure.
       const simulatedPath = `${settings.masterDriveLink}&path=${currentUser.role}/${new Date().toISOString().split('T')[0]}/Task_${selectedRequest?.id}`;
       setSubmissionLink(simulatedPath);
       setIsUploading(false);
-    }, 1500);
+    }, 1800);
   };
 
   const markRead = (id: number) => {
@@ -254,7 +267,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
           <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
           <input 
             type="text" 
-            placeholder="Search ID, Name, Office..." 
+            placeholder="Search ID, Title, Office..." 
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -288,7 +301,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase tracking-wider text-slate-500">
                   <th className="px-6 py-4 font-semibold">ID</th>
-                  <th className="px-6 py-4 font-semibold">Requester</th>
+                  <th className="px-6 py-4 font-semibold">Title / Requester</th>
                   <th className="px-6 py-4 font-semibold">Types</th>
                   <th className="px-6 py-4 font-semibold">Status</th>
                   <th className="px-6 py-4 font-semibold">Assigned To</th>
@@ -306,9 +319,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
                   filteredRequests.map((req) => (
                     <tr key={req.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4 text-sm font-medium text-slate-600">#{req.id}</td>
-                      <td className="px-6 py-4 text-sm text-slate-900 font-medium">
-                        {req.requesterName}
-                        <div className="text-xs text-slate-400 font-normal">{req.officeName}</div>
+                      <td className="px-6 py-4 text-sm text-slate-900">
+                        <div className="font-bold text-slate-800">{req.taskTitle || 'Untitled'}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">{req.requesterName} • {req.officeName}</div>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">
                         <div className="flex flex-wrap gap-1">
@@ -395,8 +408,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
                     {/* Details */}
                     <div className="lg:col-span-2 space-y-4">
                        <div>
-                          <h3 className="text-lg font-bold text-slate-900 leading-snug">{req.requestDetails}</h3>
-                          <div className="flex flex-wrap gap-2 mt-2">
+                          <h3 className="text-xl font-bold text-slate-900 leading-snug">{req.taskTitle}</h3>
+                          <p className="text-sm text-slate-500 mt-2 leading-relaxed">{req.requestDetails}</p>
+                          <div className="flex flex-wrap gap-2 mt-3">
                              {req.requestTypes.map(t => <span key={t} className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-md">{t}</span>)}
                           </div>
                        </div>
@@ -460,7 +474,7 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-slate-100 bg-slate-50">
               <h2 className="text-xl font-bold text-slate-800">Assign Teams</h2>
-              <p className="text-slate-500 text-sm mt-1">Select one or more teams for Request #{selectedRequest?.id}.</p>
+              <p className="text-slate-500 text-sm mt-1">Select one or more teams for <span className="font-bold text-slate-800">"{selectedRequest?.taskTitle}"</span>.</p>
             </div>
             <div className="p-6 space-y-6">
               <div>
@@ -515,65 +529,73 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
           <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
              <div className="p-6 border-b border-slate-100 bg-slate-50">
               <h2 className="text-xl font-bold text-slate-800">Submit Deliverables</h2>
-              <p className="text-slate-500 text-sm mt-1">Upload files to the Master Drive Storage.</p>
+              <p className="text-slate-500 text-sm mt-1">Upload files for <span className="font-semibold">"{selectedRequest?.taskTitle}"</span>.</p>
             </div>
             <div className="p-6 space-y-6">
-               <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
-                  <h4 className="text-xs font-bold text-blue-800 uppercase mb-2 flex items-center gap-2">
-                    <HardDrive className="w-4 h-4" /> Destination
-                  </h4>
-                  <p className="text-xs text-blue-900 font-mono break-all">
-                    {settings.masterDriveLink.substring(0, 40)}...
-                    <br/>
-                    <span className="font-bold text-blue-700">/ {currentUser.role} / {new Date().toISOString().split('T')[0]} / Task_{selectedRequest?.id}</span>
-                  </p>
+               
+               <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Upload Files</label>
+                  
+                  {/* File Upload Dropzone Simulation */}
+                  <div 
+                    onClick={() => { if(!submissionLink) handleMockDriveUpload(); }}
+                    className={`
+                      border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer relative overflow-hidden
+                      ${submissionLink ? 'border-green-200 bg-green-50' : 'border-slate-300 hover:border-indigo-400 hover:bg-slate-50'}
+                      ${isUploading ? 'pointer-events-none opacity-80' : ''}
+                    `}
+                  >
+                     {isUploading ? (
+                        <div className="flex flex-col items-center justify-center py-2">
+                           <div className="w-12 h-12 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin mb-3"></div>
+                           <p className="text-sm font-bold text-slate-700">Uploading to Master Drive...</p>
+                           <p className="text-xs text-slate-500 mt-1">{uploadProgress}% Complete</p>
+                        </div>
+                     ) : submissionLink ? (
+                        <div className="flex flex-col items-center justify-center py-2">
+                           <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3">
+                              <CheckCircle2 className="w-6 h-6" />
+                           </div>
+                           <p className="text-sm font-bold text-green-800">Files Uploaded Successfully</p>
+                           <p className="text-xs text-green-600 mt-1 mb-3">Your files are now stored in the Master Drive.</p>
+                           
+                           <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-green-200 max-w-full">
+                              <ExternalLink className="w-4 h-4 text-green-500 flex-shrink-0" />
+                              <span className="text-xs text-slate-500 truncate">{submissionLink}</span>
+                           </div>
+                        </div>
+                     ) : (
+                        <div className="flex flex-col items-center justify-center py-4 group">
+                           <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                              <UploadCloud className="w-6 h-6" />
+                           </div>
+                           <p className="text-sm font-bold text-slate-700">Click to Upload Files</p>
+                           <p className="text-xs text-slate-400 mt-1">Drag and drop or browse</p>
+                        </div>
+                     )}
+                  </div>
                </div>
 
-               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Upload Files</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    className="flex-1 rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 text-sm bg-slate-50"
-                    placeholder="Link will be generated automatically..."
-                    value={submissionLink}
-                    readOnly
-                  />
-                  <button 
-                    onClick={handleMockDriveUpload}
-                    disabled={isUploading || submissionLink.length > 0}
-                    className={`px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold border transition-colors ${
-                      submissionLink.length > 0 
-                      ? 'bg-green-50 text-green-700 border-green-200' 
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    {isUploading ? (
-                       <span className="animate-spin rounded-full h-4 w-4 border-2 border-slate-500 border-t-transparent"></span>
-                    ) : submissionLink.length > 0 ? (
-                       <CheckCircle2 className="w-5 h-5" />
-                    ) : (
-                       <>
-                         <UploadCloud className="w-5 h-5" />
-                         Upload
-                       </>
-                    )}
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Submission Notes</label>
-                <textarea
-                  className="w-full rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 min-h-[100px] text-sm p-3"
-                  placeholder="Describe the work done..."
-                  value={submissionNotes}
-                  onChange={(e) => setSubmissionNotes(e.target.value)}
-                />
-              </div>
+               {submissionLink && (
+                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Submission Notes</label>
+                    <textarea
+                      className="w-full rounded-xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 min-h-[100px] text-sm p-3"
+                      placeholder="Describe the work done..."
+                      value={submissionNotes}
+                      onChange={(e) => setSubmissionNotes(e.target.value)}
+                    />
+                 </div>
+               )}
+
             </div>
             <div className="p-4 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
               <button onClick={() => setIsSubmitModalOpen(false)} className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-200 rounded-full transition-colors">Cancel</button>
-              <button onClick={handleSubmitWork} className="px-5 py-2.5 bg-indigo-600 text-white font-bold hover:bg-indigo-700 rounded-full shadow-lg shadow-indigo-200 transition-colors flex items-center gap-2">
+              <button 
+                onClick={handleSubmitWork} 
+                disabled={!submissionLink}
+                className="px-5 py-2.5 bg-indigo-600 text-white font-bold hover:bg-indigo-700 rounded-full shadow-lg shadow-indigo-200 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <Send className="w-4 h-4" />
                 Submit
               </button>
@@ -582,10 +604,9 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
         </div>
       )}
       
-      {/* View Details Modal Logic (kept same as previous but ensures open state works) */}
+      {/* View Details Modal */}
       {isViewModalOpen && selectedRequest && (
         <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-           {/* ... Same modal content as before, reusing logic ... */}
            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
               <div>
@@ -597,6 +618,12 @@ const Dashboard: React.FC<DashboardProps> = ({ currentUser }) => {
               </button>
             </div>
             <div className="p-8 space-y-8">
+               {/* Header Title */}
+               <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                  <span className="text-xs font-bold text-indigo-500 uppercase tracking-wider">Task Title</span>
+                  <h3 className="text-xl font-bold text-indigo-900 mt-1">{selectedRequest.taskTitle}</h3>
+               </div>
+
                {/* Requester Info */}
                <div className="grid grid-cols-2 gap-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                   <div>
